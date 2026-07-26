@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Log in — NAFVNA</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="auth-wrap">
+  <a href="index.html" class="back-link">← Back</a>
+  <h1>Log in</h1>
+  <form id="loginForm" class="stack">
+    <label>Email
+      <input type="email" name="email" required>
+    </label>
+    <label>Password
+      <input type="password" name="password" required>
+    </label>
+    <button type="submit" class="btn btn-primary">Log in</button>
+    <p id="msg" class="msg"></p>
+  </form>
+  <p class="muted">No account yet? <a href="signup.html">Sign up</a></p>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+<script>
+document.getElementById("loginForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById("msg");
+  const f = new FormData(e.target);
+  const { data, error } = await sb.auth.signInWithPassword({
+    email: f.get("email"), password: f.get("password")
+  });
+  if (error) { msg.textContent = "Error: " + error.message; return; }
+
+  if (isAdminEmail(data.user.email)) {
+    window.location.href = "admin.html";
+  } else {
+    window.location.href = "profile.html";
+  }
+});
+</script>
+</body>
+</html>

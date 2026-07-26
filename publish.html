@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Publish with us — NAFVNA</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="auth-wrap wide">
+  <a href="index.html" class="back-link">← Back</a>
+  <h1>Publish with us</h1>
+  <p class="muted" id="loginGate">Checking your session…</p>
+
+  <form id="pubForm" class="stack" style="display:none;">
+
+    <!-- STEP 1 — basics -->
+    <fieldset>
+      <legend>1. About this work</legend>
+      <label>Title
+        <input type="text" name="title" required>
+      </label>
+      <label>Subject (e.g. Biotechnology, Computer Science, Literature, School Project)
+        <input type="text" name="subject" required>
+      </label>
+      <label>Topic
+        <input type="text" name="topic">
+      </label>
+      <label>Sub-topic
+        <input type="text" name="sub_topic">
+      </label>
+      <label>What makes this unique?
+        <textarea name="uniqueness" rows="3"></textarea>
+      </label>
+      <label>Number of pages
+        <input type="number" name="page_count" min="1">
+      </label>
+    </fieldset>
+
+    <!-- STEP 2 — institutions -->
+    <fieldset>
+      <legend>2. Involved institutions / groups</legend>
+      <label>How many institutions, universities, or groups are involved?
+        <input type="number" id="instCount" min="0" value="0">
+      </label>
+      <div id="instBlocks" class="dynamic-blocks"></div>
+    </fieldset>
+
+    <!-- STEP 3 — mentor -->
+    <fieldset>
+      <legend>3. Mentor / supervisor (leave blank if none)</legend>
+      <label>Name
+        <input type="text" name="mentor_name">
+      </label>
+      <label>Affiliation
+        <input type="text" name="mentor_affiliation">
+      </label>
+      <label>Contact
+        <input type="text" name="mentor_contact">
+      </label>
+    </fieldset>
+
+    <!-- STEP 4 — contributors -->
+    <fieldset>
+      <legend>4. Individual contributors</legend>
+      <label>How many people are involved (including yourself)?
+        <input type="number" id="contribCount" min="1" value="1">
+      </label>
+      <p class="notice">Each contributor's email will be public on this listing once accepted.</p>
+      <div id="contribBlocks" class="dynamic-blocks"></div>
+    </fieldset>
+
+    <!-- STEP 5 — purpose -->
+    <fieldset>
+      <legend>5. Purpose & timeline</legend>
+      <label>Purpose of this research / data / project
+        <textarea name="purpose" rows="4" required></textarea>
+      </label>
+      <label>Time taken to draft (e.g. "3 months")
+        <input type="text" name="duration_to_draft">
+      </label>
+    </fieldset>
+
+    <!-- STEP 6 — file -->
+    <fieldset>
+      <legend>6. Upload your work</legend>
+      <label>File — PDF, HTML, code, dataset, manuscript, etc. Maximum 15MB.
+        <input type="file" name="mainfile" required>
+      </label>
+      <p class="notice">This file is never shown publicly. Reviewers see it for approval; the public can only request access afterward.</p>
+    </fieldset>
+
+    <button type="submit" class="btn btn-primary">Submit for review</button>
+    <p id="msg" class="msg"></p>
+  </form>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+<script src="img-compress.js"></script>
+<script>
+let currentUser = null;
+
+(async function gate() {
+  const { data } = await sb.auth.getUser();
+  if (!data.user) {
+    document.getElementById("loginGate").innerHTML =
+      'You need an account to publish. <a href="signup.html">Sign up</a> or <a href="login.html">log in</a> first.';
+    return;
+  }
+  currentUser = data.user;
+  document.getElementById("loginGate").style.display = "none";
+  document.getElementById("pubForm").style.display = "block";
+})();
+
+function institutionBlock(i) {
+  return `
+    <div class="block">
+      <strong>Institution ${i + 1}</strong>
+      <label>Name
+        <input type="text" data-inst-name="${i}" required>
+      </label>
+      <label>Signature (upload)
+        <input type="file" accept="image/*" data-inst-sig="${i}">
+      </label>
+    </div>`;
+}
+
+function contributorBlock(i) {
+  return `
+    <div class="block">
+      <strong>Contributor ${i + 1}</strong>
+      <label>Full name
+        <input type="text" data-c-name="${i}" required>
+      </label>
+      <label>Age
+        <input type="number" data-c-age="${i}" min="1" max="120">
+      </label>
+      <label>Affiliation
+        <input type="text" data-c-aff="${i}">
+      </label>
+      <label>Schooling / program (write freely)
+        <input type="text" data-c-school="${i}">
+      </label>
+      <label>Email (will be public)
+        <input type="email" data-c-email="${i}">
+      </label>
+      <label>Contribution % in this work
+        <input type="number" data-c-pct="${i}" min="0" max="100">
+      </label>
+      <label>Photo
+        <input type="file" accept="image/*" data-c-photo="${i}">
+      </label>
+      <label>Signature
+        <input type="file" accept="image/*" data-c-sig="${i}">
+      </label>
+    </div>`;
+}
+
+document.getElementById("instCount").addEventListener("input", (e) => {
+  const n = parseInt(e.target.value || "0", 10);
+  const box = document.getElementById("instBlocks");
+  box.innerHTML = "";
+  for (let i = 0; i < n; i++) box.innerHTML += institutionBlock(i);
+});
+
+document.getElementById("contribCount").addEventListener("input", (e) => {
+  const n = Math.max(1, parseInt(e.target.value || "1", 10));
+  const box = document.getElementById("contribBlocks");
+  box.innerHTML = "";
+  for (let i = 0; i < n; i++) box.innerHTML += contributorBlock(i);
+});
+document.getElementById("contribCount").dispatchEvent(new Event("input"));
+
+async function uploadSmallImage(file, folder) {
+  if (!file || file.size === 0) return null;
+  const small = await compressImage(file, 50);
+  const path = `${folder}/${crypto.randomUUID()}.jpg`;
+  await sb.storage.from("avatars").upload(path, small, { contentType: "image/jpeg" });
+  return sb.storage.from("avatars").getPublicUrl(path).data.publicUrl;
+}
+
+document.getElementById("pubForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById("msg");
+  const f = new FormData(e.target);
+
+  const mainFile = f.get("mainfile");
+  if (mainFile && mainFile.size > 15 * 1024 * 1024) {
+    msg.textContent = "Your file is over 15MB. Please compress it and try again.";
+    return;
+  }
+
+  msg.textContent = "Uploading — this can take a moment…";
+
+  // 1. create the publication row
+  const { data: pub, error: pubErr } = await sb.from("publications").insert({
+    title: f.get("title"),
+    subject: f.get("subject"),
+    topic: f.get("topic"),
+    sub_topic: f.get("sub_topic"),
+    uniqueness: f.get("uniqueness"),
+    page_count: f.get("page_count") || null,
+    mentor_name: f.get("mentor_name"),
+    mentor_affiliation: f.get("mentor_affiliation"),
+    mentor_contact: f.get("mentor_contact"),
+    purpose: f.get("purpose"),
+    duration_to_draft: f.get("duration_to_draft"),
+    submitted_by: currentUser.id
+  }).select().single();
+
+  if (pubErr) { msg.textContent = "Error: " + pubErr.message; return; }
+
+  // 2. upload main file to the private bucket
+  if (mainFile && mainFile.size > 0) {
+    const path = `${currentUser.id}/${pub.id}/${mainFile.name}`;
+    const { error: upErr } = await sb.storage.from("submissions").upload(path, mainFile);
+    if (!upErr) {
+      await sb.from("publications").update({
+        file_path: path, file_size_kb: Math.round(mainFile.size / 1024)
+      }).eq("id", pub.id);
+    }
+  }
+
+  // 3. institutions
+  const instCount = parseInt(document.getElementById("instCount").value || "0", 10);
+  for (let i = 0; i < instCount; i++) {
+    const name = document.querySelector(`[data-inst-name="${i}"]`).value;
+    const sigFile = document.querySelector(`[data-inst-sig="${i}"]`).files[0];
+    const sig_url = await uploadSmallImage(sigFile, "institution-signatures");
+    if (name) await sb.from("publication_institutions").insert({
+      publication_id: pub.id, institution_name: name, signature_url: sig_url
+    });
+  }
+
+  // 4. contributors
+  const contribCount = parseInt(document.getElementById("contribCount").value || "1", 10);
+  for (let i = 0; i < contribCount; i++) {
+    const name = document.querySelector(`[data-c-name="${i}"]`).value;
+    const age = document.querySelector(`[data-c-age="${i}"]`).value;
+    const aff = document.querySelector(`[data-c-aff="${i}"]`).value;
+    const school = document.querySelector(`[data-c-school="${i}"]`).value;
+    const email = document.querySelector(`[data-c-email="${i}"]`).value;
+    const pct = document.querySelector(`[data-c-pct="${i}"]`).value;
+    const photoFile = document.querySelector(`[data-c-photo="${i}"]`).files[0];
+    const sigFile = document.querySelector(`[data-c-sig="${i}"]`).files[0];
+    const photo_url = await uploadSmallImage(photoFile, "contributor-photos");
+    const signature_url = await uploadSmallImage(sigFile, "contributor-signatures");
+
+    if (name) await sb.from("publication_contributors").insert({
+      publication_id: pub.id,
+      display_name: name, age: age || null, affiliation: aff,
+      schooling: school, email, contribution_percent: pct || null,
+      photo_url, signature_url,
+      profile_id: email === currentUser.email ? currentUser.id : null
+    });
+  }
+
+  msg.textContent = "Submitted! Your work is now pending review.";
+  setTimeout(() => window.location.href = "profile.html", 1500);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Publication — NAFVNA</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="auth-wrap wide">
+  <a href="index.html" class="back-link">← Back</a>
+  <div id="content">Loading…</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+<script>
+async function load() {
+  const id = new URLSearchParams(location.search).get("id");
+  const { data: p, error } = await sb.from("publications").select("*").eq("id", id).eq("status", "accepted").single();
+  if (error || !p) {
+    document.getElementById("content").innerHTML = "<p>This publication isn't available.</p>";
+    return;
+  }
+
+  const { data: contributors } = await sb.from("publication_contributors").select("*").eq("publication_id", id);
+  const { data: institutions } = await sb.from("publication_institutions").select("*").eq("publication_id", id);
+
+  let peopleHtml = (contributors || []).map(c => `
+    <div class="person-card">
+      ${c.photo_url ? `<img class="avatar-sm" src="${c.photo_url}">` : ""}
+      <div>
+        <div><strong>${c.display_name}</strong> ${c.is_mentor ? "(Mentor)" : ""} <span class="tick">✓</span></div>
+        <div class="muted">${c.affiliation || ""}</div>
+        <div class="muted">${c.email || ""}</div>
+        <div class="muted">Contribution: ${c.contribution_percent || "—"}%</div>
+      </div>
+    </div>`).join("");
+
+  let instHtml = (institutions || []).map(i => `<span class="chip">${i.institution_name}</span>`).join(" ");
+
+  document.getElementById("content").innerHTML = `
+    <div class="eyebrow">${p.subject || ""}</div>
+    <h1>${p.title}</h1>
+    <p class="muted">Serial: ${p.serial_number} · Roll: ${p.roll_number}</p>
+    <p>${p.purpose || ""}</p>
+    <p class="muted">Pages: ${p.page_count || "—"} · Time to draft: ${p.duration_to_draft || "—"}</p>
+    <div style="margin:16px 0;">${instHtml}</div>
+    <h3>Contributors</h3>
+    <div class="people-grid">${peopleHtml}</div>
+
+    <div class="block" style="margin-top:32px;">
+      <strong>Request the full document</strong>
+      <p class="muted">The full file isn't published publicly. Enter the serial and roll number above to request access by email.</p>
+      <label>Serial number <input id="reqSerial" value="${p.serial_number}"></label>
+      <label>Roll number <input id="reqRoll" value="${p.roll_number}"></label>
+      <button class="btn btn-teal" onclick="requestFull('${p.title.replace(/'/g,"")}')">Request full preview</button>
+    </div>
+  `;
+}
+
+function requestFull(title) {
+  const serial = document.getElementById("reqSerial").value;
+  const roll = document.getElementById("reqRoll").value;
+  const subject = encodeURIComponent("Request full document — " + title);
+  const body = encodeURIComponent(`Serial number: ${serial}\nRoll number: ${roll}\n\nPlease share access to the full document.`);
+  window.location.href = `mailto:office@nafvna.com?subject=${subject}&body=${body}`;
+}
+
+load();
+</script>
+</body>
+</html>

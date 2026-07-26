@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My profile — NAFVNA</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="auth-wrap wide">
+  <a href="index.html" class="back-link">← Back</a>
+  <div id="content">Loading…</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+<script>
+async function load() {
+  const { data: sess } = await sb.auth.getUser();
+  if (!sess.user) { window.location.href = "login.html"; return; }
+
+  const { data: profile } = await sb.from("profiles").select("*").eq("id", sess.user.id).single();
+  const { data: pubs } = await sb.from("publications").select("*").eq("submitted_by", sess.user.id).order("created_at", { ascending: false });
+
+  const tick = profile.is_verified ? ' <span class="tick">✓ verified</span>' : "";
+  let html = `
+    <div class="profile-head">
+      ${profile.profile_photo_url ? `<img class="avatar" src="${profile.profile_photo_url}">` : ""}
+      <div>
+        <h1>${profile.full_name}${tick}</h1>
+        <p class="muted">${profile.affiliation || ""}</p>
+        <p class="muted">Score: ${Number(profile.score).toFixed(1)}</p>
+      </div>
+    </div>
+    <button class="btn btn-outline" onclick="sb.auth.signOut().then(()=>location.href='index.html')">Log out</button>
+    <h2 style="margin-top:32px;">Your submissions</h2>
+  `;
+
+  if (!pubs || pubs.length === 0) {
+    html += `<p class="muted">You haven't submitted anything yet. <a href="publish.html">Publish with us →</a></p>`;
+  } else {
+    pubs.forEach(p => {
+      const canRequest = !p.last_status_request || (Date.now() - new Date(p.last_status_request).getTime()) > 60*60*1000;
+      const overTwelveHrs = p.last_status_request && (Date.now() - new Date(p.last_status_request).getTime()) > 12*60*60*1000;
+      html += `
+        <div class="block">
+          <strong>${p.title}</strong> — <span class="status-${p.status}">${p.status}</span>
+          <p class="muted">Submitted ${new Date(p.created_at).toLocaleDateString()}</p>
+          ${p.status === 'pending' ? `
+            <button class="btn btn-outline btn-sm" ${canRequest ? "" : "disabled"} onclick="requestUpdate('${p.id}', this)">
+              ${canRequest ? "Request status update" : "Available again in under an hour"}
+            </button>
+            ${overTwelveHrs ? `<a class="btn btn-sm btn-teal" href="mailto:office@nafvna.com?subject=Speed%20review%20request&body=Please%20check%20status%20of%20submission:%20${encodeURIComponent(p.title)}%20(id:%20${p.id})">Email for speed tracking</a>` : ""}
+          ` : ""}
+          ${p.status === 'accepted' ? `<a href="publication.html?id=${p.id}">View public listing →</a>` : ""}
+        </div>`;
+    });
+  }
+
+  document.getElementById("content").innerHTML = html;
+}
+
+async function requestUpdate(id, btn) {
+  await sb.from("publications").update({ last_status_request: new Date().toISOString() }).eq("id", id);
+  btn.disabled = true;
+  btn.textContent = "Requested — thank you";
+}
+
+load();
+</script>
+</body>
+</html>

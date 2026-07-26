@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sign up — NAFVNA</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="auth-wrap">
+  <a href="index.html" class="back-link">← Back</a>
+  <h1>Create your account</h1>
+  <p class="muted">This is required before you can publish or be tagged as a contributor.</p>
+
+  <form id="signupForm" class="stack">
+    <label>Full name
+      <input type="text" name="full_name" required>
+    </label>
+    <label>Email
+      <input type="email" name="email" required>
+    </label>
+    <label>Password
+      <input type="password" name="password" minlength="6" required>
+    </label>
+    <label>Age
+      <input type="number" name="age" min="1" max="120">
+    </label>
+    <label>Current affiliation (institute / university / company / independent)
+      <input type="text" name="affiliation">
+    </label>
+    <label>Schooling / education (write freely — e.g. "High School: XYZ School; B.Tech: GIET University, ongoing")
+      <textarea name="schooling" rows="3"></textarea>
+    </label>
+    <label>Profile photo
+      <input type="file" name="photo" accept="image/*">
+    </label>
+    <label>Signature (photo or scan)
+      <input type="file" name="signature" accept="image/*">
+    </label>
+    <p class="notice">Your email will be visible on any publication you're tagged on. This is required for verification and contact purposes.</p>
+    <button type="submit" class="btn btn-primary">Create account</button>
+    <p id="msg" class="msg"></p>
+  </form>
+  <p class="muted">Already have an account? <a href="login.html">Log in</a></p>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-config.js"></script>
+<script src="img-compress.js"></script>
+<script>
+document.getElementById("signupForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const msg = document.getElementById("msg");
+  msg.textContent = "Creating your account…";
+  const f = new FormData(e.target);
+
+  const { data, error } = await sb.auth.signUp({
+    email: f.get("email"),
+    password: f.get("password"),
+    options: { data: { full_name: f.get("full_name") } }
+  });
+
+  if (error) { msg.textContent = "Error: " + error.message; return; }
+  const userId = data.user.id;
+
+  // upload photo + signature (compressed to under 50KB) if provided
+  let photo_url = null, signature_url = null;
+  const photoFile = f.get("photo");
+  const sigFile = f.get("signature");
+
+  if (photoFile && photoFile.size > 0) {
+    const small = await compressImage(photoFile, 50);
+    const path = `${userId}/photo.jpg`;
+    await sb.storage.from("avatars").upload(path, small, { upsert: true, contentType: "image/jpeg" });
+    photo_url = sb.storage.from("avatars").getPublicUrl(path).data.publicUrl;
+  }
+  if (sigFile && sigFile.size > 0) {
+    const small = await compressImage(sigFile, 50);
+    const path = `${userId}/signature.jpg`;
+    await sb.storage.from("avatars").upload(path, small, { upsert: true, contentType: "image/jpeg" });
+    signature_url = sb.storage.from("avatars").getPublicUrl(path).data.publicUrl;
+  }
+
+  await sb.from("profiles").update({
+    full_name: f.get("full_name"),
+    age: f.get("age") || null,
+    affiliation: f.get("affiliation"),
+    schooling: f.get("schooling"),
+    profile_photo_url: photo_url,
+    signature_url: signature_url
+  }).eq("id", userId);
+
+  msg.textContent = "Account created. Check your email to confirm, then log in.";
+  setTimeout(() => window.location.href = "login.html", 1800);
+});
+</script>
+</body>
+</html>
